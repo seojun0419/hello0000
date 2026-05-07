@@ -1,0 +1,1333 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Surviving Circle</title>
+    <style>
+        * {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            outline: none;
+        }
+
+        body {
+            margin: 0; padding: 0;
+            background-color: #333;
+            display: flex; justify-content: center; align-items: center;
+            height: 100vh; overflow: hidden;
+            font-family: 'Malgun Gothic', 'Arial', sans-serif;
+            touch-action: none; 
+        }
+
+        #game-container {
+            position: relative;
+            width: 1024px; height: 768px;
+            background-color: #fff;
+            border: 5px solid red;
+            box-sizing: content-box; overflow: hidden;
+            touch-action: none;
+        }
+
+        canvas { display: block; }
+
+        .joy-base {
+            position: absolute; bottom: 30px;
+            width: 120px; height: 120px;
+            background-color: rgba(0, 0, 0, 0.2); border-radius: 50%;
+            touch-action: none; z-index: 5;
+        }
+        .joy-knob {
+            position: absolute; top: 50%; left: 50%;
+            width: 50px; height: 50px;
+            background-color: rgba(0, 0, 0, 0.6); border-radius: 50%;
+            transform: translate(-50%, -50%); pointer-events: none;
+        }
+        #joy-move { left: 30px; }
+        #joy-aim { right: 30px; }
+
+        #status-text {
+            position: absolute; top: 40%; width: 100%;
+            text-align: center; font-weight: bold; color: rgba(0,0,0,0.8);
+            font-size: 60px; pointer-events: none; display: none; z-index: 8;
+        }
+
+        #start-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.9); color: white;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 40;
+        }
+        #start-screen h1 { 
+            font-size: 80px; margin-bottom: 40px; color: #fff; text-shadow: 0 0 20px red; 
+        }
+        .start-btn {
+            padding: 15px 40px; font-size: 24px; cursor: pointer;
+            color: #fff; border: none; border-radius: 10px; font-weight: bold;
+            transition: background-color 0.2s;
+            margin-bottom: 15px; width: 300px;
+        }
+        #play-btn { background-color: #f00; font-size: 32px; padding: 20px 60px; }
+        #play-btn:hover { background-color: #c00; }
+        #round5-btn { background-color: #ff9800; }
+        #round5-btn:hover { background-color: #e68a00; }
+        #round10-btn { background-color: #9c27b0; }
+        #round10-btn:hover { background-color: #7b1fa2; }
+        #round15-btn { background-color: #009688; }
+        #round15-btn:hover { background-color: #00796b; }
+
+        #overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0); color: white;
+            display: none; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 30; transition: background-color 2s ease-in-out;
+        }
+        #overlay.active { display: flex; background-color: rgba(0, 0, 0, 1); }
+        #death-text { font-size: 60px; font-weight: bold; margin-bottom: 10px; color: #ff4444; text-shadow: 0 0 15px red; }
+        #stats-text { font-size: 30px; margin-bottom: 30px; text-align: center; line-height: 1.5; color: #ddd; }
+        
+        #restart-btn, .shop-btn {
+            padding: 15px 40px; font-size: 24px; cursor: pointer;
+            background-color: #fff; color: #000; border: none; border-radius: 5px; font-weight: bold;
+        }
+        #restart-btn:hover, .shop-btn:hover { background-color: #ddd; }
+        #restart-btn { display: none; pointer-events: auto; }
+
+        #shop-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #000000; 
+            color: white;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            display: none;
+            z-index: 20;
+        }
+        #shop-round-label {
+            position: absolute; top: 30px; left: 30px;
+            font-size: 40px; font-weight: bold; color: white;
+        }
+        #shop-overlay h2 { font-size: 40px; margin-bottom: 20px; color: #ffd700; margin-top: 0; text-shadow: 0 0 10px rgba(255, 215, 0, 0.5); }
+        
+        #shop-coins-container {
+            display: flex; align-items: center; margin-bottom: 20px; font-size: 26px; font-weight: bold;
+        }
+        .coin-icon {
+            display: inline-block; width: 24px; height: 24px;
+            background-color: #FFD700; border: 3px solid #DAA520; border-radius: 50%;
+            margin-right: 10px;
+        }
+        .btn-coin-icon {
+            display: inline-block; width: 14px; height: 14px;
+            background-color: #FFD700; border: 2px solid #DAA520; border-radius: 50%;
+        }
+
+        .shop-list {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: repeat(6, 1fr);
+            gap: 10px 15px;
+            width: 920px;
+            height: 480px;
+            padding: 5px;
+            box-sizing: border-box;
+        }
+
+        .shop-item {
+            width: 100%;
+            height: 100%;
+            display: flex; justify-content: space-between; align-items: center;
+            background-color: rgba(255,255,255,0.15); padding: 8px 15px; border-radius: 8px;
+            font-size: 15px;
+            box-sizing: border-box; 
+            border: 2px solid transparent; 
+        }
+
+        .buy-btn {
+            padding: 6px 10px; font-size: 14px; cursor: pointer; border-radius: 5px; 
+            border: 1px solid #666; 
+            background-color: #000; 
+            color: white; font-weight: bold; min-width: 80px; 
+            display: inline-flex; justify-content: center; align-items: center; gap: 6px;
+        }
+        .buy-btn:disabled { background-color: #111; border-color: #333; cursor: not-allowed; color: #666; }
+        .buy-btn:hover:not(:disabled) { background-color: #222; }
+        
+        #next-round-btn { 
+            margin-top: 20px; background-color: #2196F3; color: white;
+            padding: 12px 40px; font-size: 22px; 
+            border: none; border-radius: 5px; font-weight: bold; cursor: pointer;
+        }
+        #next-round-btn:hover { background-color: #1976D2; }
+
+        #fast-play-btn {
+            position: absolute;
+            top: 70px; right: 20px;
+            padding: 8px 15px;
+            background-color: rgba(0, 0, 0, 0.6);
+            color: white;
+            border: 2px solid white;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            z-index: 15;
+            display: none; 
+            transition: all 0.2s;
+        }
+        #fast-play-btn.active {
+            background-color: rgba(255, 69, 0, 0.8);
+            border-color: #FFD700;
+            color: #FFD700;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas" width="1024" height="768"></canvas>
+    <div id="joy-move" class="joy-base"><div id="joy-move-knob" class="joy-knob"></div></div>
+    <div id="joy-aim" class="joy-base"><div id="joy-aim-knob" class="joy-knob"></div></div>
+    <div id="status-text">PAUSED</div>
+    <button id="fast-play-btn" onclick="toggleFastPlay()">▶ 1x Speed</button>
+
+    <div id="start-screen">
+        <h1>Surviving Circle</h1>
+        <button id="play-btn" class="start-btn" onclick="startGame()">Play</button>
+        <button id="round5-btn" class="start-btn" onclick="startRound5()">Go to Round 5</button>
+        <button id="round10-btn" class="start-btn" onclick="startRound10()">Go to Round 10</button>
+        <button id="round15-btn" class="start-btn" onclick="startRound15()">Go to Round 15</button>
+    </div>
+
+    <div id="shop-overlay">
+        <div id="shop-round-label">1 Round</div>
+        <h2>상점</h2>
+        <div id="shop-coins-container">
+            <span class="coin-icon"></span> <span id="shop-coins-text">보유: 0 / 누적: 0</span>
+        </div>
+        
+        <div class="shop-list">
+            <div class="shop-item">
+                <span>발사 횟수 1 증가 (현재: <span id="shop-firerate-val">3</span>/s)</span>
+                <button class="buy-btn" id="btn-upg-1" onclick="buyUpgrade(1)"></button>
+            </div>
+            <div class="shop-item">
+                <span>최대 하트 1 증가 (현재: <span id="shop-hearts-val">3</span>)</span>
+                <button class="buy-btn" id="btn-upg-2" onclick="buyUpgrade(2)"></button>
+            </div>
+            <div class="shop-item" id="shop-item-guns">
+                <span>추가 총 (최대 5개, 현재: <span id="shop-guns-val">1</span>)</span>
+                <button class="buy-btn" id="btn-upg-3" onclick="buyUpgrade(3)"></button>
+            </div>
+            <div class="shop-item" id="shop-item-shotgun">
+                <div>산탄총<br><span style="font-size: 12px; color: #ccc; letter-spacing: -0.5px; white-space: nowrap;">첫번째 적에게 닿은 총알이 3갈래로 갈라집니다.</span></div>
+                <button class="buy-btn" id="btn-upg-4" onclick="buyUpgrade(4)"></button>
+            </div>
+            <div class="shop-item" id="shop-item-pierce">
+                <div>관통 총알<br><span style="font-size: 12px; color: #ccc; letter-spacing: -0.5px; white-space: nowrap;">총알이 적을 관통합니다.</span></div>
+                <button class="buy-btn" id="btn-upg-5" onclick="buyUpgrade(5)"></button>
+            </div>
+            <div class="shop-item" id="shop-item-fire">
+                <div><span style="color: #ff4444; font-weight:bold;">불 총알 (<span id="shop-fire-val">0</span>단계)</span><br><span id="shop-fire-desc" style="font-size: 12px; color: #ccc; letter-spacing: -0.5px; white-space: nowrap;">0% 확률로 적에게 10배의 피해를 입히는 총알을 발사합니다.</span></div>
+                <button class="buy-btn" id="btn-upg-6" onclick="buyUpgrade(6)"></button>
+            </div>
+            <div class="shop-item" id="shop-item-star">
+                <div><span style="color:#FFD700; font-weight:bold;">★ 보호의 별 (<span id="shop-star-val">0</span>단계)</span><br><span style="font-size: 12px; color: #ccc; letter-spacing: -0.5px; white-space: nowrap;">20초마다 무적 발동 (지속 시간: <span id="shop-star-dur">0</span>초)</span></div>
+                <button class="buy-btn" id="btn-upg-7" onclick="buyUpgrade(7)"></button>
+            </div>
+            <div class="shop-item" id="shop-item-ice">
+                <div><span style="color: #44aaff; font-weight:bold;">얼음 총알 (<span id="shop-ice-val">0</span>단계)</span><br><span id="shop-ice-desc" style="font-size: 12px; color: #ccc; letter-spacing: -0.5px; white-space: nowrap;">0% 확률로 적을 2초간 기절시키는 총알을 발사합니다.</span></div>
+                <button class="buy-btn" id="btn-upg-8" onclick="buyUpgrade(8)"></button>
+            </div>
+            
+            <div class="shop-item" style="background: transparent; border: none;"></div>
+            <div class="shop-item" style="background: transparent; border: none;"></div>
+            <div class="shop-item" style="background: transparent; border: none;"></div>
+            <div class="shop-item" style="background: transparent; border: none;"></div>
+        </div>
+        
+        <button id="next-round-btn" onclick="startRound()">Next Round</button>
+    </div>
+
+    <div id="overlay">
+        <div id="death-text">You Died</div>
+        <div id="stats-text"></div>
+        <button id="restart-btn" onclick="returnToMenu()">처음 화면으로</button>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const statusText = document.getElementById('status-text');
+    const overlay = document.getElementById('overlay');
+    const restartBtn = document.getElementById('restart-btn');
+    const shopOverlay = document.getElementById('shop-overlay');
+    const fastPlayBtn = document.getElementById('fast-play-btn');
+    
+    // --- 금 이펙트 데이터 ---
+    const SQUARE_CRACK_DATA = [
+        [ [ {x:-50, y:-30}, {x:-45,y:-32}, {x:-40,y:-30}, {x:-43,y:-25} ], [ {x:50, y:20}, {x:45,y:18}, {x:42,y:23}, {x:46,y:28} ], [ {x:-10, y:-50}, {x:-8,y:-45}, {x:-12,y:-42}, {x:-5,y:-46} ], [ {x:0, y:50}, {x:3,y:45}, {x:-2,y:42}, {x:5,y:48} ] ],
+        [ [ {x:-43,y:-25}, {x:-35,y:-20}, {x:-30,y:-10} ], [ {x:46,y:28}, {x:35,y:30}, {x:30,y:20} ], [ {x:-12,y:-42}, {x:-15,y:-30} ], [ {x:-50, y:10}, {x:-42, y:8}, {x:-38, y:12}, {x:-30, y:5} ] ],
+        [ [ {x:-30, y:-10}, {x:-20, y:-5}, {x:-10, y:-2} ], [ {x:30, y:20}, {x:20, y:15}, {x:10, y:10} ], [ {x:-2,y:42}, {x:-5, y:30}, {x:-8, y:20}, {x:-15, y:15} ] ],
+        [ [ {x:-10, y:-2}, {x:0,y:0}, {x:10, y:10} ], [ {x:-15, y:15}, {x:0, y:0} ], [ {x:-15, y:-30}, {x:-10, y:-15}, {x:-10,y:-2} ], [ {x:50, y:-10}, {x:40, y:-15}, {x:35, y:-10}, {x:20,y:0}, {x:10,y:-2} ] ]
+    ];
+
+    // --- 게임 상태 및 재화 ---
+    let n = 1;
+    let gameState = 'menu'; 
+    let lastTime = Date.now();
+    let roundDuration = 0;
+    let roundTimeLeft = 0;
+    let coins = 0;
+    let totalCoins = 0; 
+    let totalSurvivalTime = 0; 
+    let gameSpeed = 1; 
+    
+    // --- 영구 업그레이드 스탯 및 상점 비용 ---
+    let fireRate = 3;
+    let fireRateCost = 50;
+    let heartUpgrades = 0; 
+    let heartUpCost = 70;
+    let gunsCount = 1; 
+    let gunCosts = [120, 200, 400, 1000]; 
+    let hasShotgun = false;
+    let hasPiercing = false;
+    
+    let fireBulletLevel = 0;
+    let iceBulletLevel = 0; 
+    let starLevel = 0; 
+    const starDurations = [0, 5, 5.5, 6, 6.5, 7];
+
+    // --- 엔티티 및 특수 스킬 타이머 ---
+    let enemySpawnTimer = 0;
+    let squareSpawnTimer = 0;
+    let pentagonSpawnTimer = 0;
+    let hexSpawnTimer = 0;
+    
+    let squareSpawnCount = 0;
+    let pentagonSpawnCount = 0;
+    let hexSpawnCount = 0;
+    
+    let usedHexCorners = [];
+    let globalBuff1Window = 0;
+    let globalBuff2Window = 0;
+
+    let shootTimer = 0;
+    let stunTimer = 0; 
+    let aimAngle = 0; 
+    let enemyIdCounter = 0;
+    let protectionTimer = 0; 
+
+    const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+    const joyMoveVector = { x: 0, y: 0 };
+    
+    const player = { x: 512, y: 384, radius: 50, speed: 200, hearts: 3 };
+    let bullets = [];
+    let enemies = [];
+    let trails = []; 
+    const enemySizes = [50, 70, 100, 200]; 
+
+    function toggleFastPlay() {
+        if (gameSpeed === 1) {
+            gameSpeed = 2;
+            fastPlayBtn.innerText = '▶▶ 2x Speed';
+            fastPlayBtn.classList.add('active');
+        } else {
+            gameSpeed = 1;
+            fastPlayBtn.innerText = '▶ 1x Speed';
+            fastPlayBtn.classList.remove('active');
+        }
+    }
+
+    function returnToMenu() {
+        overlay.classList.remove('active');
+        restartBtn.style.display = 'none';
+        document.getElementById('start-screen').style.display = 'flex';
+        gameState = 'menu';
+    }
+
+    function addCoins(amount) {
+        coins += amount;
+        totalCoins += amount;
+    }
+
+    function initStats() {
+        fireRate = 3; 
+        fireRateCost = 50;
+        heartUpgrades = 0; 
+        heartUpCost = 70;
+        gunsCount = 1; 
+        hasShotgun = false;
+        hasPiercing = false;
+        fireBulletLevel = 0;
+        iceBulletLevel = 0;
+        starLevel = 0;
+        
+        totalSurvivalTime = 0; 
+        protectionTimer = 0;
+        stunTimer = 0;
+
+        gameSpeed = 1;
+        fastPlayBtn.innerText = '▶ 1x Speed';
+        fastPlayBtn.classList.remove('active');
+        
+        player.x = 512;
+        player.y = 384;
+    }
+
+    function startGame() {
+        document.getElementById('start-screen').style.display = 'none';
+        n = 1;
+        coins = 0;
+        totalCoins = 0;
+        initStats();
+        startRound();
+    }
+
+    function startRound5() {
+        document.getElementById('start-screen').style.display = 'none';
+        n = 5;
+        initStats();
+        coins = 1000;
+        totalCoins = 1000;
+        openShop();
+    }
+
+    function startRound10() {
+        document.getElementById('start-screen').style.display = 'none';
+        n = 10;
+        initStats();
+        coins = 8000;
+        totalCoins = 8000;
+        openShop();
+    }
+
+    function startRound15() {
+        document.getElementById('start-screen').style.display = 'none';
+        n = 15;
+        initStats();
+        coins = 28000;
+        totalCoins = 28000;
+        openShop();
+    }
+
+    function startRound() {
+        let rem = n % 5;
+        if (rem === 0) roundDuration = 25;
+        else if (rem === 1) roundDuration = 30;
+        else if (rem === 2) roundDuration = 40;
+        else if (rem === 3) roundDuration = 50;
+        else if (rem === 4) roundDuration = 60;
+
+        roundTimeLeft = roundDuration;
+        protectionTimer = 0; 
+        stunTimer = 0;
+        
+        player.hearts = 3 + heartUpgrades; 
+        bullets = [];
+        enemies = [];
+        trails = []; 
+        
+        squareSpawnTimer = 0;
+        pentagonSpawnTimer = 0;
+        hexSpawnTimer = 0;
+        
+        squareSpawnCount = 0;
+        pentagonSpawnCount = 0;
+        hexSpawnCount = 0;
+        
+        usedHexCorners = [];
+        globalBuff1Window = 0;
+        globalBuff2Window = 0;
+        
+        shopOverlay.style.display = 'none';
+        overlay.classList.remove('active');
+        restartBtn.style.display = 'none';
+        fastPlayBtn.style.display = 'block'; 
+        
+        gameState = 'playing';
+        lastTime = Date.now();
+    }
+
+    // --- 상점 시스템 ---
+    function openShop() {
+        gameState = 'shop';
+        shopOverlay.style.display = 'flex';
+        fastPlayBtn.style.display = 'none'; 
+        updateShopUI();
+    }
+
+    function updateShopUI() {
+        document.getElementById('shop-round-label').innerText = `${n} Round`;
+
+        document.getElementById('shop-coins-text').innerText = `보유: ${coins} / 누적: ${totalCoins}`;
+        document.getElementById('shop-firerate-val').innerText = fireRate;
+        document.getElementById('shop-hearts-val').innerText = 3 + heartUpgrades;
+        document.getElementById('shop-guns-val').innerText = gunsCount;
+
+        let btn1 = document.getElementById('btn-upg-1');
+        btn1.innerHTML = `${fireRateCost} <span class="btn-coin-icon"></span>`;
+        btn1.disabled = (coins < fireRateCost);
+
+        let btn2 = document.getElementById('btn-upg-2');
+        btn2.innerHTML = `${heartUpCost} <span class="btn-coin-icon"></span>`;
+        btn2.disabled = (coins < heartUpCost);
+        
+        let btn3 = document.getElementById('btn-upg-3');
+        if (gunsCount >= 5) { 
+            btn3.innerText = '최대치 도달'; btn3.disabled = true; 
+            document.getElementById('shop-item-guns').style.borderColor = '#FFD700'; 
+        } else { 
+            btn3.innerHTML = `${gunCosts[gunsCount - 1]} <span class="btn-coin-icon"></span>`; 
+            btn3.disabled = (coins < gunCosts[gunsCount - 1]); 
+            document.getElementById('shop-item-guns').style.borderColor = 'transparent';
+        }
+
+        let btn4 = document.getElementById('btn-upg-4');
+        if (hasShotgun) { 
+            btn4.innerText = '구매 완료'; btn4.disabled = true; 
+            document.getElementById('shop-item-shotgun').style.borderColor = '#FFD700';
+        } else { 
+            btn4.innerHTML = `333 <span class="btn-coin-icon"></span>`; btn4.disabled = (coins < 333); 
+            document.getElementById('shop-item-shotgun').style.borderColor = 'transparent';
+        }
+
+        let btn5 = document.getElementById('btn-upg-5');
+        if (hasPiercing) { 
+            btn5.innerText = '구매 완료'; btn5.disabled = true; 
+            document.getElementById('shop-item-pierce').style.borderColor = '#FFD700';
+        } else { 
+            btn5.innerHTML = `1000 <span class="btn-coin-icon"></span>`; btn5.disabled = (coins < 1000); 
+            document.getElementById('shop-item-pierce').style.borderColor = 'transparent';
+        }
+
+        let btn6 = document.getElementById('btn-upg-6');
+        document.getElementById('shop-fire-val').innerText = fireBulletLevel;
+        document.getElementById('shop-fire-desc').innerText = `${fireBulletLevel}% 확률로 적에게 10배의 피해를 입히는 총알을 발사합니다.`;
+        if (fireBulletLevel >= 20) {
+            btn6.innerText = '최대치 도달'; btn6.disabled = true;
+            document.getElementById('shop-item-fire').style.borderColor = '#FFD700';
+        } else {
+            btn6.innerHTML = `5000 <span class="btn-coin-icon"></span>`; btn6.disabled = (coins < 5000);
+            document.getElementById('shop-item-fire').style.borderColor = fireBulletLevel > 0 ? '#FFD700' : 'transparent';
+        }
+
+        let btn7 = document.getElementById('btn-upg-7');
+        document.getElementById('shop-star-val').innerText = starLevel;
+        document.getElementById('shop-star-dur').innerText = starDurations[starLevel];
+        if (starLevel > 0) {
+            document.getElementById('shop-item-star').style.borderColor = '#FFD700'; 
+        } else {
+            document.getElementById('shop-item-star').style.borderColor = 'transparent';
+        }
+        if (starLevel === 0) {
+            btn7.innerHTML = `2000 <span class="btn-coin-icon"></span>`; btn7.disabled = (coins < 2000);
+        } else if (starLevel >= 5) {
+            btn7.innerText = '최대치 도달'; btn7.disabled = true;
+        } else {
+            btn7.innerHTML = `1000 <span class="btn-coin-icon"></span>`; btn7.disabled = (coins < 1000);
+        }
+
+        let btn8 = document.getElementById('btn-upg-8');
+        document.getElementById('shop-ice-val').innerText = iceBulletLevel;
+        document.getElementById('shop-ice-desc').innerText = `${iceBulletLevel}% 확률로 적을 2초간 기절시키는 총알을 발사합니다.`;
+        if (iceBulletLevel >= 20) {
+            btn8.innerText = '최대치 도달'; btn8.disabled = true;
+            document.getElementById('shop-item-ice').style.borderColor = '#FFD700';
+        } else {
+            btn8.innerHTML = `5000 <span class="btn-coin-icon"></span>`; btn8.disabled = (coins < 5000);
+            document.getElementById('shop-item-ice').style.borderColor = iceBulletLevel > 0 ? '#FFD700' : 'transparent';
+        }
+    }
+
+    function buyUpgrade(type) {
+        if (type === 1 && coins >= fireRateCost) {
+            coins -= fireRateCost; 
+            fireRate += 1; 
+            fireRateCost = Math.floor(fireRateCost * 1.2); 
+        } else if (type === 2 && coins >= heartUpCost) {
+            coins -= heartUpCost; 
+            heartUpgrades += 1; 
+            heartUpCost = Math.floor(heartUpCost * 1.3);
+        } else if (type === 3 && gunsCount < 5 && coins >= gunCosts[gunsCount - 1]) {
+            coins -= gunCosts[gunsCount - 1]; 
+            gunsCount += 1;
+        } else if (type === 4 && !hasShotgun && coins >= 333) {
+            coins -= 333; hasShotgun = true;
+        } else if (type === 5 && !hasPiercing && coins >= 1000) {
+            coins -= 1000; hasPiercing = true;
+        } else if (type === 6 && fireBulletLevel < 20 && coins >= 5000) {
+            coins -= 5000; fireBulletLevel++;
+        } else if (type === 7) {
+            if (starLevel === 0 && coins >= 2000) {
+                coins -= 2000; starLevel = 1;
+            } else if (starLevel > 0 && starLevel < 5 && coins >= 1000) {
+                coins -= 1000; starLevel++;
+            }
+        } else if (type === 8 && iceBulletLevel < 20 && coins >= 5000) {
+            coins -= 5000; iceBulletLevel++;
+        }
+        updateShopUI();
+    }
+
+    // --- 입력 및 조작 ---
+    window.addEventListener('keydown', (e) => {
+        if(keys.hasOwnProperty(e.code)) keys[e.code] = true;
+        if (e.code === 'Space') {
+            e.preventDefault();
+            if (gameState === 'playing') { gameState = 'paused'; statusText.style.display = 'block'; } 
+            else if (gameState === 'paused') { gameState = 'playing'; statusText.style.display = 'none'; lastTime = Date.now(); }
+        }
+    });
+    window.addEventListener('keyup', (e) => { if(keys.hasOwnProperty(e.code)) keys[e.code] = false; });
+
+    function setupJoystick(baseId, knobId, isMoveJoy) {
+        const base = document.getElementById(baseId);
+        const knob = document.getElementById(knobId);
+        let activePointerId = null;
+
+        base.addEventListener('pointerdown', (e) => {
+            activePointerId = e.pointerId; base.setPointerCapture(e.pointerId);
+            handleJoyMove(e, base, knob, isMoveJoy);
+        });
+        base.addEventListener('pointermove', (e) => {
+            if (activePointerId === e.pointerId) handleJoyMove(e, base, knob, isMoveJoy);
+        });
+        const resetJoy = (e) => {
+            if (activePointerId === e.pointerId) {
+                activePointerId = null; knob.style.transform = `translate(-50%, -50%)`;
+                base.releasePointerCapture(e.pointerId);
+                if (isMoveJoy) { joyMoveVector.x = 0; joyMoveVector.y = 0; }
+            }
+        };
+        base.addEventListener('pointerup', resetJoy);
+        base.addEventListener('pointercancel', resetJoy);
+    }
+    function handleJoyMove(e, base, knob, isMoveJoy) {
+        const rect = base.getBoundingClientRect();
+        const dx = e.clientX - (rect.left + rect.width / 2);
+        const dy = e.clientY - (rect.top + rect.height / 2);
+        const angle = Math.atan2(dy, dx);
+        const dist = Math.min(Math.hypot(dx, dy), rect.width / 2);
+        knob.style.transform = `translate(calc(-50% + ${Math.cos(angle)*dist}px), calc(-50% + ${Math.sin(angle)*dist}px))`;
+        if (isMoveJoy) { joyMoveVector.x = dx===0&&dy===0 ? 0 : Math.cos(angle); joyMoveVector.y = dx===0&&dy===0 ? 0 : Math.sin(angle); } 
+        else { aimAngle = angle; }
+    }
+    setupJoystick('joy-move', 'joy-move-knob', true); setupJoystick('joy-aim', 'joy-aim-knob', false);
+
+    // --- 게임 로직 ---
+    function spawnEnemy(type = 'triangle') {
+        let ex, ey, edge;
+        
+        if (type === 'hexagon') {
+            let availableCorners = [0, 1, 2, 3].filter(c => !usedHexCorners.includes(c));
+            if (availableCorners.length === 0) return; 
+            edge = availableCorners[Math.floor(Math.random() * availableCorners.length)];
+            usedHexCorners.push(edge);
+            
+            if (edge === 0) { ex = -150; ey = -150; } 
+            else if (edge === 1) { ex = 1174; ey = -150; } 
+            else if (edge === 2) { ex = 1174; ey = 918; } 
+            else { ex = -150; ey = 918; } 
+        } else {
+            edge = Math.floor(Math.random() * 4);
+            if (edge === 0) { ex = Math.random() * 1024; ey = -100; }
+            else if (edge === 1) { ex = 1124; ey = Math.random() * 768; }
+            else if (edge === 2) { ex = Math.random() * 1024; ey = 868; }
+            else { ex = -100; ey = Math.random() * 768; }
+        }
+
+        const angle = Math.atan2(player.y - ey, player.x - ex);
+        let speedMult = 1.0;
+        let isHoming = false;
+        
+        if (globalBuff2Window > 0) {
+            speedMult = 3.0;
+            isHoming = true;
+        } else if (globalBuff1Window > 0) {
+            speedMult = 1.5;
+        }
+
+        if (type === 'triangle') {
+            const health = Math.floor(Math.random() * 4) + 1; 
+            const size = enemySizes[health - 1]; 
+            const speed = Math.random() * (150 - 80) + 80;
+            enemies.push({ id: enemyIdCounter++, type: 'triangle', x: ex, y: ey, size: size, health: health, speed: speed, vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed, angle: angle, hitTimer: 0, freezeTimer: 0, speedMultTimer: (speedMult>1?2.0:0), speedMult: speedMult, isHoming: isHoming });
+        } else if (type === 'square') {
+            let speed = Math.random() * 20 + 100; 
+            enemies.push({ id: enemyIdCounter++, type: 'square', x: ex, y: ey, size: 100, health: 50, speed: speed, vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed, angle: angle, hitTimer: 0, freezeTimer: 0, speedMultTimer: (speedMult>1?2.0:0), speedMult: speedMult, isHoming: isHoming });
+        } else if (type === 'pentagon') {
+            enemies.push({ id: enemyIdCounter++, type: 'pentagon', x: ex, y: ey, size: 110, health: 200, speed: 80, vx: Math.cos(angle)*80, vy: Math.sin(angle)*80, angle: angle, hitTimer: 0, freezeTimer: 0, speedMultTimer: (speedMult>1?2.0:0), speedMult: speedMult, isHoming: isHoming });
+        } else if (type === 'hexagon') {
+            let hp = 30 * n; 
+            enemies.push({ 
+                id: enemyIdCounter++, type: 'hexagon', x: ex, y: ey, size: 150, health: hp, maxHealth: hp, 
+                speed: 200, vx: Math.cos(angle)*200, vy: Math.sin(angle)*200, angle: angle, 
+                hitTimer: 0, freezeTimer: 0, lifeTime: 0, hasTrig1: false, hasTrig2: false 
+            });
+        }
+    }
+
+    function checkCollision(objA, objB, rA, rB) { return Math.hypot(objA.x - objB.x, objA.y - objB.y) < (rA + rB); }
+
+    function update(dt) {
+        if (gameState !== 'playing') return;
+
+        totalSurvivalTime += dt;
+
+        if (stunTimer > 0) stunTimer -= dt;
+        if (globalBuff1Window > 0) globalBuff1Window -= dt;
+        if (globalBuff2Window > 0) globalBuff2Window -= dt;
+
+        let isInvincible = false;
+        let invincibilityStart = 20;
+        if (starLevel > 0) {
+            let duration = starDurations[starLevel];
+            invincibilityStart = 20 - duration;
+            
+            protectionTimer += dt;
+            if (protectionTimer >= 20) protectionTimer = 0;
+            if (protectionTimer >= invincibilityStart && protectionTimer <= 20) isInvincible = true;
+        }
+
+        for (let e of enemies) {
+            if (e.type === 'hexagon') {
+                let dx = player.x - e.x;
+                let dy = player.y - e.y;
+                let dist = Math.hypot(dx, dy);
+                let minDist = player.radius + 130; 
+                if (dist < minDist && dist > 0) {
+                    let overlap = minDist - dist;
+                    player.x += (dx / dist) * overlap;
+                    player.y += (dy / dist) * overlap;
+                }
+            }
+        }
+
+        if (stunTimer <= 0) {
+            let vx = joyMoveVector.x, vy = joyMoveVector.y;
+            if (keys.ArrowUp) vy -= 1; if (keys.ArrowDown) vy += 1;
+            if (keys.ArrowLeft) vx -= 1; if (keys.ArrowRight) vx += 1;
+            if (vx !== 0 || vy !== 0) {
+                const len = Math.hypot(vx, vy);
+                player.x += (vx / len) * player.speed * dt; player.y += (vy / len) * player.speed * dt;
+                player.x = Math.max(50, Math.min(974, player.x)); player.y = Math.max(50, Math.min(718, player.y));
+            }
+
+            shootTimer += dt;
+            if (shootTimer >= 1 / fireRate) {
+                shootTimer = 0;
+                let offsets = [];
+                if (gunsCount === 1) offsets = [0];
+                else if (gunsCount === 2) offsets = [-15, 15];
+                else if (gunsCount === 3) offsets = [-20, 0, 20];
+                else if (gunsCount === 4) offsets = [-30, -10, 10, 30];
+                else if (gunsCount === 5) offsets = [-30, -15, 0, 15, 30];
+
+                offsets.forEach(off => {
+                    let isFire = false;
+                    let isIce = false;
+                    let rand = Math.random() * 100;
+                    
+                    if (rand < fireBulletLevel) {
+                        isFire = true;
+                    } else if (rand < fireBulletLevel + iceBulletLevel) {
+                        isIce = true;
+                    }
+
+                    let bx = player.x + Math.cos(aimAngle)*80 - Math.sin(aimAngle)*off;
+                    let by = player.y + Math.sin(aimAngle)*80 + Math.cos(aimAngle)*off;
+
+                    bullets.push({
+                        x: bx, y: by,
+                        vx: Math.cos(aimAngle) * 500, vy: Math.sin(aimAngle) * 500,
+                        hasSplit: false, isFire: isFire, isIce: isIce, hitEnemies: new Set()
+                    });
+                });
+            }
+        }
+
+        for (let i = trails.length - 1; i >= 0; i--) {
+            trails[i].life -= dt;
+            if (trails[i].life <= 0) {
+                trails.splice(i, 1);
+            }
+        }
+
+        for (let i = bullets.length - 1; i >= 0; i--) {
+            let b = bullets[i];
+            b.x += b.vx * dt; 
+            b.y += b.vy * dt;
+            
+            if (b.isFire) {
+                trails.push({ x: b.x, y: b.y, type: 'fire', life: 1.0 });
+            } else if (b.isIce) {
+                trails.push({ x: b.x, y: b.y, type: 'ice', life: 1.0 });
+            }
+
+            if (b.x < -20 || b.x > 1044 || b.y < -20 || b.y > 788) bullets.splice(i, 1);
+        }
+
+        let roundElapsedTime = roundDuration - roundTimeLeft;
+
+        enemySpawnTimer += dt;
+        if (enemySpawnTimer >= 1 / n) { enemySpawnTimer = 0; spawnEnemy('triangle'); }
+
+        if (n >= 5) {
+            if (roundElapsedTime >= 2) {
+                if (squareSpawnCount === 0) {
+                    spawnEnemy('square');
+                    squareSpawnCount++;
+                    squareSpawnTimer = 0;
+                } else {
+                    squareSpawnTimer += dt;
+                    if (squareSpawnTimer >= (25 / n)) { 
+                        squareSpawnTimer = 0; 
+                        spawnEnemy('square'); 
+                        squareSpawnCount++;
+                    }
+                }
+            }
+        }
+        
+        if (n >= 10) {
+            if (roundElapsedTime >= 3) {
+                if (pentagonSpawnCount === 0) {
+                    spawnEnemy('pentagon');
+                    pentagonSpawnCount++;
+                    pentagonSpawnTimer = 0;
+                } else {
+                    pentagonSpawnTimer += dt;
+                    if (pentagonSpawnTimer >= (3 + 70 / n)) { 
+                        pentagonSpawnTimer = 0; 
+                        spawnEnemy('pentagon'); 
+                        pentagonSpawnCount++;
+                    }
+                }
+            }
+        }
+
+        if (n >= 15) {
+            if (roundElapsedTime >= 5) {
+                if (hexSpawnCount === 0) {
+                    spawnEnemy('hexagon');
+                    hexSpawnCount++;
+                    hexSpawnTimer = 0;
+                } else {
+                    hexSpawnTimer += dt;
+                    if (hexSpawnTimer >= 10) {
+                        spawnEnemy('hexagon');
+                        hexSpawnCount++;
+                        hexSpawnTimer = 0;
+                    }
+                }
+            }
+        }
+
+        for (let i = enemies.length - 1; i >= 0; i--) {
+            let e = enemies[i];
+            
+            if (e.freezeTimer > 0) {
+                e.freezeTimer -= dt;
+                if (e.hitTimer > 0) e.hitTimer -= dt;
+            } else {
+                if (e.type === 'hexagon') {
+                    // 빙결(freeze) 상태가 아닐 때만 육각형의 내부 시간(lifeTime)이 흐르도록 함.
+                    e.lifeTime += dt;
+                    
+                    if (e.lifeTime <= 3.0) {
+                        e.x += e.vx * dt; e.y += e.vy * dt;
+                    } else if (e.lifeTime > 4.0 && e.lifeTime <= 6.0) {
+                        e.angle += 4 * Math.PI * dt; 
+                    } else if (e.lifeTime > 6.0 && !e.hasTrig1) {
+                        e.hasTrig1 = true;
+                        globalBuff1Window = 1.0;
+                        enemies.forEach(en => { if(en.type !== 'hexagon') { en.speedMultTimer = 2.0; en.speedMult = 1.5; }});
+                    } else if (e.lifeTime > 16.0 && e.lifeTime <= 18.0) {
+                        e.angle += 10 * Math.PI * dt;
+                    } else if (e.lifeTime > 18.0 && !e.hasTrig2) {
+                        e.hasTrig2 = true;
+                        globalBuff2Window = 1.0;
+                        enemies.forEach(en => { if(en.type !== 'hexagon') { en.speedMultTimer = 2.0; en.speedMult = 3.0; en.isHoming = true; }});
+                    }
+                    if (e.hitTimer > 0) e.hitTimer -= dt;
+                } else {
+                    let mult = 1.0;
+                    if (e.speedMultTimer && e.speedMultTimer > 0) {
+                        e.speedMultTimer -= dt;
+                        mult = e.speedMult;
+                        if (e.isHoming) e.angle = Math.atan2(player.y - e.y, player.x - e.x);
+                    } else {
+                        e.speedMult = 1.0; e.isHoming = false;
+                    }
+
+                    if (e.type === 'pentagon') {
+                        e.speed -= e.speed * 0.1 * dt;
+                    }
+                    
+                    e.vx = Math.cos(e.angle) * e.speed * mult;
+                    e.vy = Math.sin(e.angle) * e.speed * mult;
+                    
+                    e.x += e.vx * dt; 
+                    e.y += e.vy * dt;
+                    
+                    if (e.hitTimer > 0) e.hitTimer -= dt;
+
+                    let eRad = 0;
+                    if (e.type === 'square') eRad = e.size * 0.5;
+                    else if (e.type === 'pentagon' || e.type === 'small_pentagon') eRad = e.size / (2 * Math.sin(Math.PI/5));
+                    else eRad = e.size * 0.4; 
+
+                    if (e.type === 'small_pentagon') {
+                        if (e.x < eRad) { e.x = eRad; e.vx *= -1; e.angle = Math.atan2(e.vy, e.vx); }
+                        if (e.x > 1024 - eRad) { e.x = 1024 - eRad; e.vx *= -1; e.angle = Math.atan2(e.vy, e.vx); }
+                        if (e.y < eRad) { e.y = eRad; e.vy *= -1; e.angle = Math.atan2(e.vy, e.vx); }
+                        if (e.y > 768 - eRad) { e.y = 768 - eRad; e.vy *= -1; e.angle = Math.atan2(e.vy, e.vx); }
+                    }
+
+                    if (checkCollision(player, e, player.radius, eRad)) {
+                        if (isInvincible) {
+                            if (e.type === 'square') {
+                                if (roundTimeLeft <= 10) addCoins(100); else addCoins(50);
+                            } else if (e.type === 'small_pentagon') {
+                                if (roundTimeLeft <= 10) addCoins(200); else addCoins(100);
+                                stunTimer = 1.0; 
+                            }
+                            enemies.splice(i, 1); 
+                        } else {
+                            if (e.type === 'small_pentagon') {
+                                stunTimer = 1.0; 
+                                enemies.splice(i, 1); 
+                            } else {
+                                enemies.splice(i, 1); 
+                                if (e.type === 'square') player.hearts -= 3;
+                                else if (e.type === 'pentagon') player.hearts -= 5; 
+                                else player.hearts -= 1;
+
+                                if (player.hearts <= 0) {
+                                    gameState = 'gameover'; 
+                                    document.getElementById('stats-text').innerHTML = `도달 라운드 : ${n} Round<br>생존 시간 : ${Math.floor(totalSurvivalTime)}초`;
+                                    overlay.classList.add('active');
+                                    fastPlayBtn.style.display = 'none';
+                                    setTimeout(() => { restartBtn.style.display = 'block'; }, 1000); 
+                                    return;
+                                }
+                            }
+                        }
+                        continue; 
+                    }
+                }
+            } 
+
+            // 총알-적 충돌 판정
+            let eRad = 0;
+            if (e.type === 'square') eRad = e.size * 0.5;
+            else if (e.type === 'pentagon' || e.type === 'small_pentagon') eRad = e.size / (2 * Math.sin(Math.PI/5));
+            else if (e.type === 'hexagon') eRad = 130; 
+            else eRad = e.size * 0.4; 
+            
+            let isPentagon = (e.type === 'pentagon' || e.type === 'small_pentagon');
+
+            for (let j = bullets.length - 1; j >= 0; j--) {
+                let b = bullets[j];
+                if (!b.hitEnemies.has(e.id) && checkCollision(b, e, 10, eRad)) {
+                    b.hitEnemies.add(e.id);
+                    
+                    if (isPentagon) {
+                        e.health -= 1;
+                        e.hitTimer = 0.1; 
+                        bullets.splice(j, 1); 
+                    } else {
+                        // 정육각형 등 다른 적에게는 특수효과 정상 부여
+                        if (b.isIce) {
+                            e.freezeTimer += 2.0; // 얼음 총알 맞을 때마다 2초씩 기절 누적
+                        }
+
+                        if (b.isFire) {
+                            if (e.type === 'triangle') e.health = 0;
+                            else e.health -= 10;
+                        } else {
+                            e.health -= 1;
+                        }
+                        
+                        if (e.type === 'triangle' && e.health > 0) {
+                            if (roundTimeLeft <= 10) addCoins(2);
+                            else addCoins(1);
+                        }
+
+                        e.hitTimer = 0.1; 
+                        
+                        if (hasShotgun && !b.hasSplit) {
+                            let baseAngle = Math.atan2(b.vy, b.vx);
+                            let splitAngles = [baseAngle - Math.PI/6, baseAngle, baseAngle + Math.PI/6];
+                            splitAngles.forEach(ang => {
+                                bullets.push({ x: b.x, y: b.y, vx: Math.cos(ang) * 500, vy: Math.sin(ang) * 500, hasSplit: true, isFire: b.isFire, isIce: b.isIce, hitEnemies: new Set([e.id]) });
+                            });
+                            bullets.splice(j, 1);
+                        } 
+                        else if (!hasPiercing) { 
+                            bullets.splice(j, 1); 
+                        }
+                    }
+
+                    if (e.health <= 0) { 
+                        if (e.type === 'triangle') {
+                            if (roundTimeLeft <= 10) addCoins(2); else addCoins(1);
+                        } else if (e.type === 'square') {
+                            if (roundTimeLeft <= 10) addCoins(100); else addCoins(50);
+                        } else if (e.type === 'small_pentagon') {
+                            if (roundTimeLeft <= 10) addCoins(200); else addCoins(100);
+                        } else if (e.type === 'pentagon') {
+                            for(let k=0; k<5; k++) {
+                                let a = e.angle + k * 2 * Math.PI / 5 + Math.PI / 5; 
+                                enemies.push({
+                                    id: enemyIdCounter++, type: 'small_pentagon',
+                                    x: e.x, y: e.y, size: 50, health: 50, speed: 100,
+                                    vx: Math.cos(a) * 100, vy: Math.sin(a) * 100, angle: a, hitTimer: 0, freezeTimer: 0
+                                });
+                            }
+                        } else if (e.type === 'hexagon') {
+                            let reward = 60 * n; 
+                            if (roundTimeLeft <= 10) addCoins(reward * 2); else addCoins(reward);
+                        }
+                        enemies.splice(i, 1); break; 
+                    } else if (e.type === 'triangle') { 
+                        e.size = enemySizes[Math.max(0, e.health - 1)]; 
+                    }
+                }
+            }
+        }
+
+        roundTimeLeft -= dt;
+        if (roundTimeLeft <= 0) {
+            n++; 
+            openShop();
+        }
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, 1024, 768);
+
+        if (gameState === 'menu') return;
+
+        let invincibilityStart = 20;
+        let beamStart = 20;
+        let goldStart = 20;
+
+        if (starLevel > 0) {
+            let duration = starDurations[starLevel];
+            invincibilityStart = 20 - duration;
+            beamStart = invincibilityStart - 5;
+            goldStart = invincibilityStart - 2.5;
+        }
+
+        if (starLevel > 0 && protectionTimer >= beamStart && protectionTimer < 20) {
+            let beamProgress = Math.min((protectionTimer - beamStart) / 2.5, 1);
+            let beamEndY = player.y * beamProgress;
+            if (protectionTimer >= invincibilityStart) beamEndY = player.y; 
+
+            let alpha = protectionTimer >= invincibilityStart ? 0.5 : 0.3;
+            ctx.fillStyle = `rgba(255, 255, 150, ${alpha})`;
+            ctx.fillRect(player.x - 10, 0, 20, beamEndY);
+        }
+
+        trails.forEach(t => {
+            let ratio = Math.max(0, t.life); 
+            ctx.beginPath();
+            let rad = 6 * ratio + 4; 
+            ctx.arc(t.x, t.y, rad, 0, Math.PI * 2);
+            let grad = ctx.createRadialGradient(t.x, t.y, 0, t.x, t.y, rad);
+            if (t.type === 'fire') {
+                grad.addColorStop(0, `rgba(204, 0, 0, ${ratio})`);
+                grad.addColorStop(1, `rgba(150, 0, 0, 0)`);
+            } else {
+                grad.addColorStop(0, `rgba(100, 200, 255, ${ratio})`);
+                grad.addColorStop(1, `rgba(50, 150, 255, 0)`);
+            }
+            ctx.fillStyle = grad;
+            ctx.fill();
+        });
+
+        ctx.save();
+        ctx.translate(player.x, player.y);
+        
+        let playerColor = 'white';
+        let goldRatio = 0;
+        if (starLevel > 0) {
+            if (protectionTimer >= goldStart && protectionTimer < invincibilityStart) {
+                goldRatio = (protectionTimer - goldStart) / 2.5; 
+            } else if (protectionTimer >= invincibilityStart && protectionTimer <= 20) {
+                goldRatio = 1;
+            }
+        }
+        
+        if (goldRatio > 0) {
+            let grad = ctx.createRadialGradient(0, 0, 0, 0, 0, 50);
+            grad.addColorStop(0, 'gold');
+            grad.addColorStop(goldRatio, 'gold');
+            grad.addColorStop(goldRatio, 'white');
+            playerColor = grad;
+        }
+
+        ctx.rotate(aimAngle);
+
+        ctx.beginPath();
+        ctx.moveTo(80, 0); 
+        ctx.lineTo(2000, 0); 
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(255, 0, 0, 0.4)'; 
+        ctx.setLineDash([15, 10]); 
+        ctx.stroke();
+        ctx.setLineDash([]); 
+
+        ctx.beginPath(); ctx.arc(0, 0, 50, 0, Math.PI * 2);
+        ctx.fillStyle = playerColor; ctx.fill();
+        ctx.lineWidth = 3; ctx.strokeStyle = 'black'; ctx.stroke();
+        
+        if (starLevel > 0 && protectionTimer >= invincibilityStart && protectionTimer <= 20) {
+            ctx.save();
+            ctx.fillStyle = '#FFFF33'; 
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#FFFF00';
+            ctx.beginPath();
+            let spikes = 5;
+            let outerRadius = 25;
+            let innerRadius = 10;
+            let rot = Math.PI / 2 * 3;
+            let step = Math.PI / spikes;
+            ctx.moveTo(0, -outerRadius);
+            for (let k = 0; k < spikes; k++) {
+                ctx.lineTo(Math.cos(rot) * outerRadius, Math.sin(rot) * outerRadius);
+                rot += step;
+                ctx.lineTo(Math.cos(rot) * innerRadius, Math.sin(rot) * innerRadius);
+                rot += step;
+            }
+            ctx.lineTo(0, -outerRadius);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        }
+
+        ctx.fillStyle = 'black';
+        let offsets = [];
+        if (gunsCount === 1) offsets = [0];
+        else if (gunsCount === 2) offsets = [-15, 15];
+        else if (gunsCount === 3) offsets = [-20, 0, 20];
+        else if (gunsCount === 4) offsets = [-30, -10, 10, 30];
+        else if (gunsCount === 5) offsets = [-30, -15, 0, 15, 30];
+        offsets.forEach(off => { ctx.fillRect(50, -7.5 + off, 30, 15); });
+        
+        ctx.restore();
+
+        if (stunTimer > 0) {
+            ctx.save();
+            ctx.translate(player.x, player.y - 75); 
+            let spinAngle = (Date.now() % 1000) / 1000 * Math.PI * 2; 
+            ctx.rotate(spinAngle);
+            ctx.beginPath();
+            ctx.arc(0, 0, 15, 0, Math.PI * 1.5); 
+            ctx.strokeStyle = '#b366ff'; 
+            ctx.lineWidth = 5;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        enemies.forEach(e => {
+            ctx.save(); ctx.translate(e.x, e.y); 
+            
+            if (e.type === 'triangle') {
+                ctx.rotate(e.angle + Math.PI / 2);
+                const h = e.size * (Math.sqrt(3) / 2);
+                ctx.beginPath(); ctx.moveTo(0, -h * 0.6); ctx.lineTo(e.size / 2, h * 0.4); ctx.lineTo(-e.size / 2, h * 0.4); ctx.closePath();
+                ctx.fillStyle = e.hitTimer > 0 ? '#ff8888' : 'red'; 
+                ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = 'black'; ctx.stroke();
+            } else if (e.type === 'square') {
+                ctx.rotate(e.angle); 
+                ctx.fillStyle = e.hitTimer > 0 ? '#8888ff' : '#0000ff'; 
+                ctx.fillRect(-e.size/2, -e.size/2, e.size, e.size);
+                
+                let maxLvl = -1;
+                if(e.health <= 10) maxLvl = 3;
+                else if(e.health <= 20) maxLvl = 2;
+                else if(e.health <= 30) maxLvl = 1;
+                else if(e.health <= 40) maxLvl = 0;
+
+                if (maxLvl >= 0) {
+                    ctx.strokeStyle = 'rgba(0, 0, 30, 0.6)';
+                    ctx.lineWidth = 1; 
+                    ctx.lineJoin = 'round';
+                    ctx.beginPath();
+                    for(let l=0; l <= maxLvl; l++) {
+                        let paths = SQUARE_CRACK_DATA[l];
+                        for(let path of paths) {
+                            ctx.moveTo(path[0].x, path[0].y);
+                            for(let p=1; p<path.length; p++) {
+                                ctx.lineTo(path[p].x, path[p].y);
+                            }
+                        }
+                    }
+                    ctx.stroke();
+                }
+            } else if (e.type === 'pentagon' || e.type === 'small_pentagon') {
+                ctx.rotate(e.angle - Math.PI/2); 
+                let pRadius = e.size / (2 * Math.sin(Math.PI/5));
+                ctx.beginPath();
+                for(let k=0; k<5; k++) {
+                    let a = k * 2 * Math.PI / 5;
+                    let px = Math.cos(a) * pRadius;
+                    let py = Math.sin(a) * pRadius;
+                    if(k===0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+                
+                if (e.type === 'pentagon') {
+                    ctx.fillStyle = e.hitTimer > 0 ? '#b366ff' : '#4b0082'; 
+                } else {
+                    ctx.fillStyle = e.hitTimer > 0 ? '#e6ccff' : '#b366ff'; 
+                }
+                ctx.fill();
+
+                if (e.type === 'pentagon') {
+                    let maxLvl = Math.floor((200 - e.health) / 50) - 1;
+                    if (maxLvl > 3) maxLvl = 3;
+                    if (maxLvl >= 0) {
+                        ctx.save();
+                        ctx.scale(1.2, 1.2); 
+                        ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+                        ctx.lineWidth = 1.5;
+                        ctx.lineJoin = 'round';
+                        ctx.beginPath();
+                        for(let l=0; l <= maxLvl; l++) {
+                            let paths = SQUARE_CRACK_DATA[l];
+                            for(let path of paths) {
+                                ctx.moveTo(path[0].x, path[0].y);
+                                for(let p=1; p<path.length; p++) {
+                                    ctx.lineTo(path[p].x, path[p].y);
+                                }
+                            }
+                        }
+                        ctx.stroke();
+                        ctx.restore();
+                    }
+                }
+            } else if (e.type === 'hexagon') {
+                ctx.rotate(e.angle); 
+                let pRadius = e.size; 
+                ctx.beginPath();
+                for(let k=0; k<6; k++) {
+                    let a = k * Math.PI / 3;
+                    let px = Math.cos(a) * pRadius;
+                    let py = Math.sin(a) * pRadius;
+                    if(k===0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+                ctx.fillStyle = e.hitTimer > 0 ? '#00aa00' : '#006400'; 
+                ctx.fill();
+
+                let maxLvl = Math.floor((e.maxHealth - e.health) / 200) - 1;
+                if (maxLvl > 3) maxLvl = 3;
+                if (maxLvl >= 0) {
+                    ctx.save();
+                    ctx.scale(1.5, 1.5); 
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+                    ctx.lineWidth = 1.5;
+                    ctx.lineJoin = 'round';
+                    ctx.beginPath();
+                    for(let l=0; l <= maxLvl; l++) {
+                        let paths = SQUARE_CRACK_DATA[l];
+                        for(let path of paths) {
+                            ctx.moveTo(path[0].x, path[0].y);
+                            for(let p=1; p<path.length; p++) {
+                                ctx.lineTo(path[p].x, path[p].y);
+                            }
+                        }
+                    }
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
+            ctx.restore();
+        });
+
+        bullets.forEach(b => { 
+            ctx.beginPath(); 
+            ctx.arc(b.x, b.y, 10, 0, Math.PI * 2); 
+            if (b.isFire) ctx.fillStyle = '#cc0000'; // 진한 붉은색
+            else if (b.isIce) ctx.fillStyle = 'skyblue';
+            else ctx.fillStyle = 'black'; 
+            ctx.fill(); 
+        });
+
+        if ((n === 5 || n === 10 || n === 15) && roundDuration - roundTimeLeft < 3) {
+            ctx.fillStyle = 'red';
+            ctx.font = 'bold 50px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('New enemy appear!', 512, 150);
+        }
+
+        ctx.fillStyle = 'black'; ctx.font = 'bold 36px Arial';
+        ctx.textAlign = 'left'; ctx.fillText(`Round ${n}`, 20, 50);
+        
+        ctx.textAlign = 'center';
+        ctx.fillText(`❤️ x ${player.hearts}`, 512, 50);
+        
+        const coinCx = 485; 
+        const coinCy = 85;  
+        ctx.beginPath();
+        ctx.arc(coinCx, coinCy, 12, 0, Math.PI * 2);
+        ctx.fillStyle = '#FFD700'; ctx.fill();
+        ctx.lineWidth = 3; ctx.strokeStyle = '#DAA520'; ctx.stroke();
+
+        ctx.fillStyle = '#FFD700'; ctx.font = 'bold 22px Arial';
+        ctx.textAlign = 'left';
+        let coinText = `${coins}`;
+        ctx.fillText(coinText, coinCx + 20, coinCy + 7);
+
+        if (roundTimeLeft <= 10 && roundTimeLeft > 0) {
+            ctx.save();
+            ctx.translate(680, 50); 
+            let pulse = 1 + 0.2 * Math.abs(Math.sin(Date.now() / 150)); 
+            ctx.scale(pulse, pulse);
+            ctx.fillStyle = '#ff0000';
+            ctx.font = 'bold 45px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(Math.ceil(roundTimeLeft) + 's', 0, 0);
+            ctx.restore();
+
+            if (Date.now() % 500 < 250) {
+                ctx.fillStyle = '#FF4500'; ctx.font = 'bold 24px Arial';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'alphabetic';
+                let coinTextWidth = ctx.measureText(coinText).width;
+                ctx.fillText('x2', coinCx + 20 + coinTextWidth + 10, coinCy + 7);
+            }
+        }
+
+        const barW = 200, barH = 20, barX = 804, barY = 30;
+        ctx.fillStyle = 'black'; ctx.fillRect(barX, barY, barW, barH);
+        const progress = (roundDuration - roundTimeLeft) / roundDuration;
+        ctx.fillStyle = '#00FF00'; ctx.fillRect(barX, barY, barW * Math.min(1, Math.max(0, progress)), barH);
+    }
+
+    function loop() {
+        let now = Date.now();
+        let dt = ((now - lastTime) / 1000) * gameSpeed;
+        lastTime = now;
+
+        if (gameState === 'playing') { update(dt); draw(); } 
+        else if (gameState === 'paused' || gameState === 'gameover' || gameState === 'shop') { draw(); }
+
+        requestAnimationFrame(loop);
+    }
+
+    requestAnimationFrame(loop);
+</script>
+</body>
+</html>
