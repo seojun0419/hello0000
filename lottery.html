@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>물리 엔진 뽑기 게임 v2.2</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px 0;
+            background-color: #1e1e24;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Malgun Gothic', sans-serif;
+            color: #ffffff;
+            overflow-y: auto;
+        }
+        h1 {
+            margin-bottom: 10px;
+            font-size: 24px;
+            color: #f1c40f;
+        }
+        .info {
+            margin-bottom: 15px;
+            font-size: 14px;
+            color: #bdc3c7;
+            text-align: center;
+            max-width: 600px;
+            line-height: 1.4;
+        }
+        canvas {
+            background-color: #ffffff;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border-radius: 12px;
+        }
+        .btn-restart {
+            margin-top: 15px;
+            padding: 10px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-restart:hover {
+            background-color: #c0392b;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+</head>
+<body>
+
+<h1>🎰 물리 엔진 뽑기 게임 v2.2</h1>
+<div class="info">
+    톱니바퀴 회전 속도가 <b>초당 60도</b>로 조정되었습니다.<br>
+    공이 <b>빨간색 트램펄린에 닿으면 강하게 튕겨 오릅니다!</b><br>
+    <i>(중력가속도 0.6배, 트램펄린 반발력 0.7배 적용 완료)</i>
+</div>
+
+<script>
+    const Engine = Matter.Engine,
+          Render = Matter.Render,
+          Runner = Matter.Runner,
+          Bodies = Matter.Bodies,
+          Body = Matter.Body,
+          Composite = Matter.Composite,
+          Events = Matter.Events;
+
+    const engine = Engine.create();
+    // 중력가속도 기존 0.85의 0.6배로 수정
+    engine.gravity.y = 0.51; 
+
+
+    const canvasWidth = 800;
+    const canvasHeight = 1200;
+
+    const render = Render.create({
+        element: document.body,
+        engine: engine,
+        options: {
+            width: canvasWidth,
+            height: canvasHeight,
+            wireframes: false, // 고품질 그래픽 렌더링 활성화
+            background: '#ffffff'
+        }
+    });
+
+    // 1. 외곽 벽 및 깔때기 구조 생성
+    const walls = [
+        // 천장 및 좌우 외곽 벽
+        Bodies.rectangle(canvasWidth / 2, 10, canvasWidth, 20, { isStatic: true, render: { fillStyle: '#2c3e50' } }), 
+        Bodies.rectangle(10, canvasHeight / 2, 20, canvasHeight, { isStatic: true, render: { fillStyle: '#2c3e50' } }), 
+        Bodies.rectangle(canvasWidth - 10, canvasHeight / 2, 20, canvasHeight, { isStatic: true, render: { fillStyle: '#2c3e50' } }),
+        
+        // 최하단 깔때기 (Goal로 유도하는 빗면)
+        Bodies.rectangle(180, canvasHeight - 90, 400, 25, { isStatic: true, angle: Math.PI / 6, render: { fillStyle: '#2c3e50' } }),
+        Bodies.rectangle(canvasWidth - 180, canvasHeight - 90, 400, 25, { isStatic: true, angle: -Math.PI / 6, render: { fillStyle: '#2c3e50' } })
+    ];
+
+    // 2. 곳곳에 추가된 빗면 (경사로) 배치 규칙
+    const slopes = [
+        Bodies.rectangle(130, 160, 260, 20, { isStatic: true, angle: Math.PI / 7, render: { fillStyle: '#7f8c8d' } }),
+        Bodies.rectangle(canvasWidth - 140, 380, 250, 20, { isStatic: true, angle: -Math.PI / 8, render: { fillStyle: '#7f8c8d' } }),
+        Bodies.rectangle(140, 640, 250, 20, { isStatic: true, angle: Math.PI / 9, render: { fillStyle: '#7f8c8d' } }),
+        Bodies.rectangle(canvasWidth - 150, 850, 280, 20, { isStatic: true, angle: -Math.PI / 7, render: { fillStyle: '#7f8c8d' } }),
+        Bodies.rectangle(300, 1060, 220, 20, { isStatic: true, angle: Math.PI / 10, render: { fillStyle: '#7f8c8d' } })
+    ];  
+
+    // 3. 트램펄린 배치 
+    const trampolines = [
+        Bodies.rectangle(500, 220, 150, 22, { isStatic: true, angle: -Math.PI / 6, restitution: 1.0, label: 'trampoline', render: { fillStyle: '#e74c3c' } }),
+        Bodies.rectangle(300, 480, 150, 22, { isStatic: true, angle: 0, restitution: 1.0, label: 'trampoline', render: { fillStyle: '#e74c3c' } }),
+        Bodies.rectangle(170, 600, 60, 22, { isStatic: true, angle: -Math.PI / 6, restitution: 1.0, label: 'trampoline', render: { fillStyle: '#e74c3c' } }),
+        Bodies.rectangle(430, 700, 140, 22, { isStatic: true, angle: +Math.PI / 7, restitution: 1.0, label: 'trampoline', render: { fillStyle: '#e74c3c' } }),
+        Bodies.rectangle(700, 800, 140, 22, { isStatic: true, angle: 0, restitution: 1.0, label: 'trampoline', render: { fillStyle: '#e74c3c' } }),
+        Bodies.rectangle(150, 850, 100, 22, { isStatic: true, angle: 0, restitution: 1.0, label: 'trampoline', render: { fillStyle: '#e74c3c' } }),
+        Bodies.rectangle(400, 1000, 170, 22, { isStatic: true, angle: 0, restitution: 1.0, label: 'trampoline', render: { fillStyle: '#e74c3c' } }),
+        Bodies.rectangle(200, 1100, 100, 22, { isStatic: true, angle: -Math.PI / 7, restitution: 1.0, label: 'trampoline', render: { fillStyle: '#e74c3c' } })
+    ];
+
+    // 4. 대형 톱니바퀴 생성 함수
+    function createGiantGear(x, y, radius, direction) {
+        const parts = [];
+        parts.push(Bodies.circle(x, y, radius, { render: { fillStyle: '#34495e' } }));
+        for (let i = 0; i < 4; i++) {
+            parts.push(Bodies.rectangle(x, y, radius * 3.0, radius * 0.15, {
+                angle: (Math.PI / 4) * i,
+                render: { fillStyle: '#34495e' }
+            }));
+        }
+        const gear = Body.create({
+            parts: parts,
+            isStatic: true,
+            friction: 0.1,
+            restitution: 0.4
+        });
+        gear.direction = direction; // 1: 시계방향, -1: 반시계방향
+        return gear;
+    }
+
+    // 톱니바퀴 배치
+    const gears = [
+        createGiantGear(330, 280, 90, 1), 
+        createGiantGear(500, 490, 100, -1),  
+        createGiantGear(300, 740, 90, 1), 
+        createGiantGear(530, 930, 100, -1)   
+    ];
+
+    // 최종 승리 목적지
+    const goal = Bodies.rectangle(canvasWidth / 2, canvasHeight - 20, 140, 30, { 
+        isStatic: true, 
+        isSensor: true, 
+        label: 'goal',
+        render: { fillStyle: '#f1c40f' } 
+    });
+
+    Composite.add(engine.world, [...walls, ...slopes, ...trampolines, ...gears, goal]);
+
+    // 5. 공 초기화
+    const names = ['준석', '정호', '소민', '재욱', '예은', '재윤', '한비', '서준', '동현', '상혁']; 
+    const balls = [];
+    let ballIndex = 0;
+
+    const dropInterval = setInterval(() => {
+        if (ballIndex >= names.length) {
+            clearInterval(dropInterval);
+            return;
+        }
+        const ball = Bodies.circle(80, 50, 18, {
+            restitution: 0.65, 
+            friction: 0.002,
+            density: 0.05,
+            label: 'ball',
+            render: { fillStyle: '#2980b9' }
+        });
+        ball.name = names[ballIndex];
+        balls.push(ball);
+        Composite.add(engine.world, ball);
+        ballIndex++;
+    }, 100);
+
+
+    Events.on(engine, 'beforeUpdate', function() {
+        // 초당 60도 회전 (= Math.PI / 3 라디안)
+        // 60FPS 기준 1프레임당 (Math.PI / 3) / 60 = Math.PI / 180 라디안
+        gears.forEach(gear => {
+            Body.setAngle(gear, gear.angle + gear.direction * (Math.PI / 180));
+        });
+    });
+
+
+    Events.on(render, 'afterRender', function() {
+        const ctx = render.context;
+        
+        ctx.font = "bold 13px 'Malgun Gothic'";
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        balls.forEach(ball => {
+            ctx.fillText(ball.name, ball.position.x, ball.position.y);
+        });
+
+        ctx.fillStyle = "#7f8c8d";
+        ctx.font = "bold 12px 'Malgun Gothic'";
+        ctx.fillText("START", 85, 25);
+
+        ctx.fillStyle = "#2c3e50";
+        ctx.font = "bold 24px 'Malgun Gothic'";
+        ctx.fillText("🏆 GOAL 🏆", canvasWidth / 2, canvasHeight - 22);
+    });
+
+    let isGameOver = false;
+
+    // 충돌 이벤트: 목적지 도달 및 트램펄린 바운스 처리
+    Events.on(engine, 'collisionStart', function(event) {
+        const pairs = event.pairs;
+        for (let i = 0; i < pairs.length; i++) {
+            const bodyA = pairs[i].bodyA;
+            const bodyB = pairs[i].bodyB;
+
+            // 목적지 도달 체크
+            if ((bodyA.label === 'goal' && bodyB.label === 'ball') ||
+                (bodyB.label === 'goal' && bodyA.label === 'ball')) {
+                
+                const winningBall = bodyA.label === 'ball' ? bodyA : bodyB;
+                
+                if (!isGameOver) {
+                    isGameOver = true;
+                    setTimeout(() => {
+                        Runner.stop(runner); 
+                        alert(`🎉 축하합니다! [${winningBall.name}] 공이 가장 먼저 GOAL에 도달하여 당첨되었습니다!`);
+                    }, 40);
+                }
+            }
+
+            if ((bodyA.label === 'trampoline' && bodyB.label === 'ball') ||
+                (bodyB.label === 'trampoline' && bodyA.label === 'ball')) {
+                
+                const ball = bodyA.label === 'ball' ? bodyA : bodyB;
+                
+                // 트램펄린 반발력 기존 -15의 0.7배로 수정
+                Body.setVelocity(ball, { 
+                    x: ball.velocity.x * 1.2, 
+                    y: -10.5 
+                });
+            }
+        }
+    });
+
+    Render.run(render);
+    const runner = Runner.create();
+    Runner.run(runner, engine);
+</script>
+
+<button class="btn-restart" onclick="window.location.reload();">🔄 게임 다시 시작하기</button>
+
+</body>
+</html>
